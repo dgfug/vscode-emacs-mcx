@@ -1,41 +1,42 @@
 import { TextEditor } from "vscode";
-import { IEmacsCommandRunner, IMarkModeController } from "../emulator";
+import type { IEmacsController } from "../emulator";
 
-export function createParallel<T>(concurrency: number, promiseFactory: () => Thenable<T>): Thenable<T[]> {
+export function makeParallel<T>(concurrency: number, promiseFactory: () => Thenable<T>): Thenable<T[]> {
   return Promise.all(Array.from({ length: concurrency }, promiseFactory));
 }
 
 export abstract class EmacsCommand {
   public abstract readonly id: string;
 
-  protected emacsController: IMarkModeController & IEmacsCommandRunner;
-  private afterExecute: () => void | Promise<unknown>;
+  /**
+   * Some commands are a part of a longer command sequence, such as `C-x r` that is followed by `i` or `s` to consist a complete command sequence `C-x r i` or `C-x r s`.
+   * Such commands are flagged as intermediate commands so that they should not call `afterCommand` and cancel the prefix argument in `EmacsEmulator.runCommand`.
+   */
+  public readonly isIntermediateCommand: boolean = false;
 
-  public constructor(afterExecute: () => void, markModeController: IMarkModeController & IEmacsCommandRunner) {
-    this.afterExecute = afterExecute;
+  protected emacsController: IEmacsController;
+
+  public constructor(markModeController: IEmacsController) {
     this.emacsController = markModeController;
   }
 
-  public run(textEditor: TextEditor, isInMarkMode: boolean, prefixArgument: number | undefined): Thenable<unknown> {
-    const ret = this.execute(textEditor, isInMarkMode, prefixArgument);
-    if (ret != null) {
-      return ret.then(this.afterExecute);
-    } else {
-      return Promise.resolve(this.afterExecute());
-    }
-  }
-
-  public abstract execute(
+  public abstract run(
     textEditor: TextEditor,
     isInMarkMode: boolean,
-    prefixArgument: number | undefined
+    prefixArgument: number | undefined,
+    args?: unknown[],
   ): void | Thenable<unknown>;
+
+  public onDidInterruptTextEditor?(): void;
 }
 
-export interface IEmacsCommandInterrupted {
+export interface ITextEditorInterruptionHandler {
   onDidInterruptTextEditor(): void;
 }
 
-export function instanceOfIEmacsCommandInterrupted(obj: any): obj is IEmacsCommandInterrupted {
+// This type guard trick is from https://stackoverflow.com/a/64163454/13103190
+export function isTextEditorInterruptionHandler<T extends { onDidInterruptTextEditor?: unknown }>(
+  obj: T,
+): obj is T & ITextEditorInterruptionHandler {
   return typeof obj.onDidInterruptTextEditor === "function";
 }

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { TextEditor, TextEditorRevealType } from "vscode";
-import { EmacsCommand, IEmacsCommandInterrupted } from ".";
+import { EmacsCommand, ITextEditorInterruptionHandler } from ".";
 
 enum RecenterPosition {
   Middle,
@@ -8,30 +8,37 @@ enum RecenterPosition {
   Bottom,
 }
 
-export class RecenterTopBottom extends EmacsCommand implements IEmacsCommandInterrupted {
+export class RecenterTopBottom extends EmacsCommand implements ITextEditorInterruptionHandler {
   public readonly id = "recenterTopBottom";
 
   private recenterPosition: RecenterPosition = RecenterPosition.Middle;
 
-  public execute(textEditor: TextEditor, isInMarkMode: boolean, prefixArgument: number | undefined) {
+  public run(textEditor: TextEditor, isInMarkMode: boolean, prefixArgument: number | undefined): void {
+    const activeRange = new vscode.Range(textEditor.selection.active, textEditor.selection.active);
+
     switch (this.recenterPosition) {
       case RecenterPosition.Middle: {
-        textEditor.revealRange(textEditor.selection, TextEditorRevealType.InCenter);
+        textEditor.revealRange(activeRange, TextEditorRevealType.InCenter);
         this.recenterPosition = RecenterPosition.Top;
         break;
       }
       case RecenterPosition.Top: {
-        textEditor.revealRange(textEditor.selection, TextEditorRevealType.AtTop);
+        textEditor.revealRange(activeRange, TextEditorRevealType.AtTop);
         this.recenterPosition = RecenterPosition.Bottom;
         break;
       }
       case RecenterPosition.Bottom: {
-        // TextEditor.revealRange does not supprt to set the cursor at the bottom of window.
+        // TextEditor.revealRange does not support to set the cursor at the bottom of window.
         // Therefore, the number of lines to scroll is calculated here.
-        const current = textEditor.selection.active.line;
-        const visibleTop = textEditor.visibleRanges[0].start.line;
-        const visibleBottom = textEditor.visibleRanges[0].end.line;
+        const visibleRange = textEditor.visibleRanges[0];
+        if (visibleRange == null) {
+          return;
+        }
+        const visibleTop = visibleRange.start.line;
+        const visibleBottom = visibleRange.end.line;
         const visibleHeight = visibleBottom - visibleTop;
+
+        const current = textEditor.selection.active.line;
 
         const nextVisibleTop = Math.max(current - visibleHeight, 1);
 
@@ -46,7 +53,7 @@ export class RecenterTopBottom extends EmacsCommand implements IEmacsCommandInte
     }
   }
 
-  public onDidInterruptTextEditor() {
+  public onDidInterruptTextEditor(): void {
     this.recenterPosition = RecenterPosition.Middle;
   }
 }

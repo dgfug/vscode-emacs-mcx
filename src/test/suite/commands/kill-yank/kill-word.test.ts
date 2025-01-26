@@ -41,7 +41,7 @@ suite("killWord and backwardKillWord with JSON document", () => {
   "bar": ""
   "baz": "piyo"
 }
-`
+`,
       );
       assertCursorsEqual(activeTextEditor, [2, 10]);
 
@@ -66,7 +66,7 @@ suite("killWord and backwardKillWord with JSON document", () => {
   "bar": ""
   "baz": "piyo"
 }
-`
+`,
       );
       assertCursorsEqual(activeTextEditor, [2, 10]);
 
@@ -353,6 +353,38 @@ suite("killWord and backwardKillWord with Lorem ipsum", () => {
       await emulator.runCommand("yank");
 
       assertTextEqual(activeTextEditor, "Lorem ipsum");
+    });
+  });
+
+  (["mark-mode", "rectangle-mode"] as const).forEach((mode) => {
+    test(`${mode} doesn't affect the behavior of killWord`, async () => {
+      setEmptyCursors(activeTextEditor, [0, 0]);
+      if (mode === "mark-mode") {
+        emulator.setMarkCommand();
+      } else if (mode === "rectangle-mode") {
+        emulator.rectangleMarkMode();
+      }
+      await emulator.runCommand("nextLine");
+      await emulator.runCommand("forwardChar");
+      // Now the cursor is at [1, 1]
+
+      await emulator.runCommand("killWord");
+      assertTextEqual(activeTextEditor, "Lorem ipsum dolor sit amet,\nc adipiscing elit,");
+    });
+
+    test(`${mode} doesn't affect the behavior of backwardKillWord`, async () => {
+      setEmptyCursors(activeTextEditor, [0, 0]);
+      if (mode === "mark-mode") {
+        emulator.setMarkCommand();
+      } else if (mode === "rectangle-mode") {
+        emulator.rectangleMarkMode();
+      }
+      await emulator.runCommand("nextLine");
+      await emulator.runCommand("forwardChar");
+      // Now the cursor is at [1, 1]
+
+      await emulator.runCommand("backwardKillWord");
+      assertTextEqual(activeTextEditor, "Lorem ipsum dolor sit amet,\nonsectetur adipiscing elit,");
     });
   });
 });

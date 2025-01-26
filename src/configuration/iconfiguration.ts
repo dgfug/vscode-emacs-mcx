@@ -1,3 +1,7 @@
+export interface IPareditConfiguration {
+  parentheses: { [key: string]: string };
+}
+
 export interface IDebugConfiguration {
   /**
    * Boolean indicating whether all logs should be suppressed
@@ -33,6 +37,16 @@ export interface IConfiguration {
   strictEmacsMove: boolean;
 
   enableOverridingTypeCommand: boolean;
+
+  /**
+   * When true, line-move moves point by visual lines (same as an Emacs variable line-move-visual).
+   */
+  lineMoveVisual: boolean;
+
+  /**
+   * Paredit configuration
+   */
+  paredit: IPareditConfiguration;
 
   /**
    * Extension debugging settings

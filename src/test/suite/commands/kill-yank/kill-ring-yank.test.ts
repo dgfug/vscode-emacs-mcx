@@ -9,6 +9,7 @@ import {
   assertTextEqual,
   cleanUpWorkspace,
   clearTextEditor,
+  delay,
   setEmptyCursors,
   setupWorkspace,
 } from "../../utils";
@@ -56,7 +57,7 @@ ABCDEFGHIJ`;
         activeTextEditor,
         `0123456789
 abcdesed do eiusmod tempor\nincididunt ut labore et\ndolore magna aliqua.fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       await emulator.runCommand("yankPop");
@@ -64,7 +65,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdedolor sit amet,\nconsectetur adipiscing elit,fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       await emulator.runCommand("yankPop");
@@ -72,7 +73,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdeLorem ipsumfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       // Repeat
@@ -81,7 +82,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdesed do eiusmod tempor\nincididunt ut labore et\ndolore magna aliqua.fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       await emulator.runCommand("yankPop");
@@ -89,7 +90,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdedolor sit amet,\nconsectetur adipiscing elit,fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       await emulator.runCommand("yankPop");
@@ -97,7 +98,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdeLorem ipsumfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       // Repeat again
@@ -106,7 +107,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdesed do eiusmod tempor\nincididunt ut labore et\ndolore magna aliqua.fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       await emulator.runCommand("yankPop");
@@ -114,7 +115,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdedolor sit amet,\nconsectetur adipiscing elit,fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       await emulator.runCommand("yankPop");
@@ -122,7 +123,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdeLorem ipsumfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
     });
 
@@ -153,7 +154,7 @@ ABCDEFGHIJ`;
         activeTextEditor,
         `0123456789
 abcde12345fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       // Then, yankPop takes from killRing
@@ -162,7 +163,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdeLorem ipsumfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       // Repeat
@@ -171,7 +172,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcde12345fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       await emulator.runCommand("yankPop");
@@ -179,7 +180,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdeLorem ipsumfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       // Repeat again
@@ -188,7 +189,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcde12345fghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
 
       await emulator.runCommand("yankPop");
@@ -196,7 +197,7 @@ ABCDEFGHIJ`
         activeTextEditor,
         `0123456789
 abcdeLorem ipsumfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
       );
     });
 
@@ -233,7 +234,7 @@ ABCDEFGHIJ`;
           activeTextEditor,
           `0123456789
 abcdeBARfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
         );
 
         // Interruption command invoked
@@ -245,7 +246,7 @@ ABCDEFGHIJ`
           activeTextEditor,
           `0123456789
 abcdeBARfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
         );
       });
 
@@ -277,7 +278,7 @@ ABCDEFGHIJ`;
           activeTextEditor,
           `0123456789
 abcdeBARfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
         );
 
         // Then, yankPop
@@ -286,7 +287,7 @@ ABCDEFGHIJ`
           activeTextEditor,
           `0123456789
 abcdeFOOfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
         );
 
         // Interruption command invoked
@@ -298,7 +299,7 @@ ABCDEFGHIJ`
           activeTextEditor,
           `0123456789
 abcdeFOOfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
         );
       });
     });
@@ -312,14 +313,14 @@ ABCDEFGHIJ`
           "delete",
           () =>
             activeTextEditor.edit((editBuilder) =>
-              editBuilder.delete(new Range(new Position(0, 0), new Position(0, 1)))
+              editBuilder.delete(new Range(new Position(0, 0), new Position(0, 1))),
             ),
         ],
         [
           "replace",
           () =>
             activeTextEditor.edit((editBuilder) =>
-              editBuilder.replace(new Range(new Position(0, 0), new Position(0, 1)), "hoge")
+              editBuilder.replace(new Range(new Position(0, 0), new Position(0, 1)), "hoge"),
             ),
         ],
       ];
@@ -360,7 +361,7 @@ ABCDEFGHIJ`;
             activeTextEditor,
             `0123456789
 abcdeBARfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
           );
 
           // Interruption command invoked
@@ -397,7 +398,7 @@ ABCDEFGHIJ`;
             activeTextEditor,
             `0123456789
 abcdeBARfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
           );
 
           // Then, yankPop
@@ -406,7 +407,7 @@ ABCDEFGHIJ`
             activeTextEditor,
             `0123456789
 abcdeFOOfghij
-ABCDEFGHIJ`
+ABCDEFGHIJ`,
           );
 
           // Interruption command invoked
@@ -521,8 +522,10 @@ suite("yank pop with auto-indent", () => {
   teardown(cleanUpWorkspace);
 
   test("Yank in a language that has auto-indent support", async function () {
-    activeTextEditor = await setupWorkspace("", { language: "typescript" });
+    activeTextEditor = await setupWorkspace("", { language: "javascript" });
     activeTextEditor.options.tabSize = 4;
+    activeTextEditor.options.insertSpaces = true;
+    await delay(1000);
 
     const killRing = new KillRing(60);
     const emulator = new EmacsEmulator(activeTextEditor, killRing);
@@ -540,17 +543,21 @@ suite("yank pop with auto-indent", () => {
     const initialText = "{\n\n}";
     await clearTextEditor(activeTextEditor, initialText);
     setEmptyCursors(activeTextEditor, [1, 0]);
+    await delay(100);
 
     // Yank pastes "bar" with auto-indentation
     await emulator.runCommand("yank");
+    await delay(100);
     assertTextEqual(activeTextEditor, "{\n    bar\n}");
 
     // YankPop pastes "foo" with auto-indentation
     await emulator.runCommand("yankPop");
+    await delay(100);
     assertTextEqual(activeTextEditor, "{\n    foo\n}");
 
     // yankPop again
     await emulator.runCommand("yankPop");
+    await delay(100);
     assertTextEqual(activeTextEditor, "{\n    bar\n}");
   });
 });
@@ -731,6 +738,8 @@ suite("With not only single text editor", () => {
   setup(async () => {
     await vscode.env.clipboard.writeText("");
   });
+
+  teardown(cleanUpWorkspace);
 
   test("shares killRing amoung multiple editors", async function () {
     const killRing = new KillRing(3);
