@@ -1,22 +1,26 @@
 import * as vscode from "vscode";
 import { moveCommandIds } from "./commands/move";
+import type { Registers } from "./commands/registers";
 import { Configuration } from "./configuration/configuration";
+import { WorkspaceConfigCache } from "./workspace-configuration";
 import { EmacsEmulator } from "./emulator";
 import { EmacsEmulatorMap } from "./emulator-map";
-import { executeCommands } from "./execute-commands";
 import { KillRing } from "./kill-yank/kill-ring";
 import { logger } from "./logger";
 import { MessageManager } from "./message";
 import { InputBoxMinibuffer } from "./minibuffer";
+import type { Unreliable } from "./utils";
 
 export function activate(context: vscode.ExtensionContext): void {
   MessageManager.registerDispose(context);
   Configuration.registerDispose(context);
+  context.subscriptions.push(WorkspaceConfigCache.instance);
 
   const killRing = new KillRing(Configuration.instance.killRingMax);
   const minibuffer = new InputBoxMinibuffer();
+  const registers: Registers = new Map();
 
-  const emulatorMap = new EmacsEmulatorMap(killRing, minibuffer);
+  const emulatorMap = new EmacsEmulatorMap(killRing, minibuffer, registers);
 
   function getAndUpdateEmulator() {
     const activeTextEditor = vscode.window.activeTextEditor;
@@ -32,29 +36,54 @@ export function activate(context: vscode.ExtensionContext): void {
     return curEmulator;
   }
 
-  vscode.workspace.onDidCloseTextDocument(() => {
-    const documents = vscode.workspace.textDocuments;
-
-    // Delete emulators once all tabs of this document have been closed
-    for (const key of emulatorMap.getKeys()) {
-      const emulator = emulatorMap.get(key);
-      if (
-        emulator === undefined ||
-        emulator.getTextEditor() === undefined ||
-        documents.indexOf(emulator.getTextEditor().document) === -1
-      ) {
-        emulatorMap.delete(key);
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor == null) {
+        return;
       }
-    }
-  });
+
+      const [curEmulator, isNew] = emulatorMap.getOrCreate(editor);
+      if (isNew) {
+        context.subscriptions.push(curEmulator);
+      } else {
+        // NOTE: `switchTextEditor()`'s behavior is flaky
+        // as it depends on a delay with an ad-hoc duration,
+        // so it's important to put this call at this else block
+        // and avoid calling it when it's not necessary.
+        curEmulator.switchTextEditor(editor);
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidCloseTextDocument(() => {
+      const documents = vscode.workspace.textDocuments;
+
+      // Delete emulators once all tabs of this document have been closed
+      for (const uri of emulatorMap.keys()) {
+        const emulator = emulatorMap.get(uri);
+        if (emulator == null || !documents.includes(emulator.getTextEditor().document)) {
+          emulatorMap.delete(uri);
+        }
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("emacs-mcx")) {
+        Configuration.reload();
+      }
+    }),
+  );
 
   function registerEmulatorCommand(
     commandName: string,
-    callback: (emulator: EmacsEmulator, ...args: any[]) => any,
-    onNoEmulator?: (...args: any[]) => any
+    callback: (emulator: EmacsEmulator, ...args: Unreliable<any>[]) => unknown, // eslint-disable-line @typescript-eslint/no-explicit-any
+    onNoEmulator?: (...args: unknown[]) => unknown,
   ) {
     const disposable = vscode.commands.registerCommand(commandName, (...args) => {
-      logger.debug(`[command]\t Command "${commandName}" executed with args (${args})`);
+      logger.debug(`[command]\t Command "${commandName}" executed with args (${JSON.stringify(args)})`);
 
       const emulator = getAndUpdateEmulator();
       if (!emulator) {
@@ -72,70 +101,106 @@ export function activate(context: vscode.ExtensionContext): void {
   if (Configuration.instance.enableOverridingTypeCommand) {
     registerEmulatorCommand(
       "type",
-      (emulator, args) => {
+      (emulator, arg0) => {
+        const text = (arg0 as unknown as { text: string }).text; // XXX: The arguments of `type` is guaranteed to have this signature.
         // Capture typing characters for prefix argument functionality.
-        logger.debug(`[type command]\t args.text = "${args.text}"`);
+        logger.debug(`[type command]\t args.text = "${text}"`);
 
-        return emulator.type(args.text);
+        return emulator.type(text);
       },
-      (args) => vscode.commands.executeCommand("default:type", args)
+      (arg0) => vscode.commands.executeCommand("default:type", arg0),
     );
   }
 
-  registerEmulatorCommand("emacs-mcx.universalArgumentDigit", (emulator, args) => {
-    const arg = args[0];
+  registerEmulatorCommand("emacs-mcx.subsequentArgumentDigit", (emulator, arg0) => {
+    if (!Array.isArray(arg0)) {
+      return;
+    }
+    const arg = arg0[0];
     if (typeof arg !== "number") {
       return;
     }
-    emulator.universalArgumentDigit(arg);
+    return emulator.subsequentArgumentDigit(arg);
   });
 
-  registerEmulatorCommand("emacs-mcx.typeChar", (emulator, args) => {
-    const arg = args[0];
+  registerEmulatorCommand("emacs-mcx.digitArgument", (emulator, arg0) => {
+    if (!Array.isArray(arg0)) {
+      return;
+    }
+    const arg = arg0[0];
+    if (typeof arg !== "number") {
+      return;
+    }
+    return emulator.digitArgument(arg);
+  });
+
+  registerEmulatorCommand("emacs-mcx.typeChar", (emulator, arg0) => {
+    if (!Array.isArray(arg0)) {
+      return;
+    }
+    const arg = arg0[0];
     if (typeof arg !== "string") {
       return;
     }
-    emulator.typeChar(arg);
+    return emulator.typeChar(arg);
   });
 
   moveCommandIds.map((commandName) => {
     registerEmulatorCommand(`emacs-mcx.${commandName}`, (emulator) => {
-      emulator.runCommand(commandName);
+      return emulator.runCommand(commandName);
     });
   });
 
   registerEmulatorCommand("emacs-mcx.isearchForward", (emulator) => {
-    emulator.runCommand("isearchForward");
+    return emulator.runCommand("isearchForward");
   });
 
   registerEmulatorCommand("emacs-mcx.isearchBackward", (emulator) => {
-    emulator.runCommand("isearchBackward");
+    return emulator.runCommand("isearchBackward");
+  });
+
+  registerEmulatorCommand("emacs-mcx.isearchForwardRegexp", (emulator) => {
+    return emulator.runCommand("isearchForwardRegexp");
+  });
+
+  registerEmulatorCommand("emacs-mcx.isearchBackwardRegexp", (emulator) => {
+    return emulator.runCommand("isearchBackwardRegexp");
+  });
+
+  registerEmulatorCommand("emacs-mcx.queryReplace", (emulator) => {
+    return emulator.runCommand("queryReplace");
+  });
+
+  registerEmulatorCommand("emacs-mcx.queryReplaceRegexp", (emulator) => {
+    return emulator.runCommand("queryReplaceRegexp");
   });
 
   registerEmulatorCommand("emacs-mcx.isearchAbort", (emulator) => {
-    emulator.runCommand("isearchAbort");
+    return emulator.runCommand("isearchAbort");
   });
 
-  registerEmulatorCommand("emacs-mcx.isearchExit", (emulator, args) => {
-    emulator.runCommand("isearchExit").then(() => {
-      const secondCommand = args.then;
-
-      if (typeof secondCommand === "string") {
-        return vscode.commands.executeCommand(secondCommand);
-      }
-    });
+  registerEmulatorCommand("emacs-mcx.isearchExit", (emulator, ...args) => {
+    return emulator.runCommand("isearchExit", args);
   });
 
   registerEmulatorCommand("emacs-mcx.deleteBackwardChar", (emulator) => {
-    emulator.runCommand("deleteBackwardChar");
+    return emulator.runCommand("deleteBackwardChar");
   });
 
   registerEmulatorCommand("emacs-mcx.deleteForwardChar", (emulator) => {
-    emulator.runCommand("deleteForwardChar");
+    return emulator.runCommand("deleteForwardChar");
+  });
+
+  registerEmulatorCommand("emacs-mcx.deleteHorizontalSpace", (emulator) => {
+    return emulator.runCommand("deleteHorizontalSpace");
   });
 
   registerEmulatorCommand("emacs-mcx.universalArgument", (emulator) => {
-    emulator.universalArgument();
+    return emulator.universalArgument();
+  });
+
+  registerEmulatorCommand("emacs-mcx.negativeArgument", (emulator) => {
+    return emulator.negativeArgument();
   });
 
   registerEmulatorCommand("emacs-mcx.killLine", (emulator) => {
@@ -207,85 +272,136 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   registerEmulatorCommand("emacs-mcx.setMarkCommand", (emulator) => {
-    emulator.setMarkCommand();
+    return emulator.setMarkCommand();
   });
 
   registerEmulatorCommand("emacs-mcx.rectangleMarkMode", (emulator) => {
-    emulator.rectangleMarkMode();
+    return emulator.rectangleMarkMode();
   });
 
   registerEmulatorCommand("emacs-mcx.popMark", (emulator) => {
-    emulator.popMark();
+    return emulator.popMark();
   });
 
   registerEmulatorCommand("emacs-mcx.exchangePointAndMark", (emulator) => {
-    emulator.exchangePointAndMark();
+    return emulator.exchangePointAndMark();
   });
 
   registerEmulatorCommand("emacs-mcx.addSelectionToNextFindMatch", (emulator) => {
-    emulator.runCommand("addSelectionToNextFindMatch");
+    return emulator.runCommand("addSelectionToNextFindMatch");
   });
 
   registerEmulatorCommand("emacs-mcx.addSelectionToPreviousFindMatch", (emulator) => {
-    emulator.runCommand("addSelectionToPreviousFindMatch");
+    return emulator.runCommand("addSelectionToPreviousFindMatch");
   });
 
   registerEmulatorCommand("emacs-mcx.cancel", (emulator) => {
-    emulator.cancel();
+    return emulator.cancel();
   });
 
   registerEmulatorCommand("emacs-mcx.newLine", (emulator) => {
-    emulator.runCommand("newLine");
+    return emulator.runCommand("newLine");
   });
 
   registerEmulatorCommand("emacs-mcx.transformToUppercase", (emulator) => {
-    emulator.runCommand("transformToUppercase");
+    return emulator.runCommand("transformToUppercase");
   });
 
   registerEmulatorCommand("emacs-mcx.transformToLowercase", (emulator) => {
-    emulator.runCommand("transformToLowercase");
+    return emulator.runCommand("transformToLowercase");
   });
 
   registerEmulatorCommand("emacs-mcx.transformToTitlecase", (emulator) => {
-    emulator.runCommand("transformToTitlecase");
+    return emulator.runCommand("transformToTitlecase");
   });
 
   registerEmulatorCommand("emacs-mcx.deleteBlankLines", (emulator) => {
-    emulator.runCommand("deleteBlankLines");
+    return emulator.runCommand("deleteBlankLines");
   });
 
   registerEmulatorCommand("emacs-mcx.recenterTopBottom", (emulator) => {
-    emulator.runCommand("recenterTopBottom");
+    return emulator.runCommand("recenterTopBottom");
+  });
+
+  registerEmulatorCommand("emacs-mcx.tabToTabStop", (emulator) => {
+    return emulator.runCommand("tabToTabStop");
+  });
+
+  registerEmulatorCommand("emacs-mcx.deleteIndentation", (emulator) => {
+    return emulator.runCommand("deleteIndentation");
   });
 
   registerEmulatorCommand("emacs-mcx.paredit.forwardSexp", (emulator) => {
-    emulator.runCommand("paredit.forwardSexp");
+    return emulator.runCommand("paredit.forwardSexp");
   });
 
   registerEmulatorCommand("emacs-mcx.paredit.forwardDownSexp", (emulator) => {
-    emulator.runCommand("paredit.forwardDownSexp");
+    return emulator.runCommand("paredit.forwardDownSexp");
   });
 
   registerEmulatorCommand("emacs-mcx.paredit.backwardSexp", (emulator) => {
-    emulator.runCommand("paredit.backwardSexp");
+    return emulator.runCommand("paredit.backwardSexp");
   });
 
   registerEmulatorCommand("emacs-mcx.paredit.backwardUpSexp", (emulator) => {
-    emulator.runCommand("paredit.backwardUpSexp");
+    return emulator.runCommand("paredit.backwardUpSexp");
+  });
+
+  registerEmulatorCommand("emacs-mcx.paredit.markSexp", (emulator) => {
+    return emulator.runCommand("paredit.markSexp");
   });
 
   registerEmulatorCommand("emacs-mcx.paredit.killSexp", (emulator) => {
-    emulator.runCommand("paredit.killSexp");
+    return emulator.runCommand("paredit.killSexp");
   });
 
-  vscode.commands.registerCommand("emacs-mcx.executeCommands", async (...args: any[]) => {
-    if (1 <= args.length) {
-      executeCommands(args[0]);
+  registerEmulatorCommand("emacs-mcx.paredit.pareditKill", (emulator) => {
+    return emulator.runCommand("paredit.pareditKill");
+  });
+
+  registerEmulatorCommand("emacs-mcx.paredit.backwardKillSexp", (emulator) => {
+    return emulator.runCommand("paredit.backwardKillSexp");
+  });
+
+  registerEmulatorCommand("emacs-mcx.copyToRegister", (emulator) => {
+    return emulator.runCommand("copyToRegister");
+  });
+
+  registerEmulatorCommand("emacs-mcx.insertRegister", (emulator) => {
+    return emulator.runCommand("insertRegister");
+  });
+
+  registerEmulatorCommand("emacs-mcx.copyRectangleToRegister", (emulator) => {
+    return emulator.runCommand("copyRectangleToRegister");
+  });
+
+  registerEmulatorCommand("emacs-mcx.pointToRegister", (emulator) => {
+    return emulator.runCommand("pointToRegister");
+  });
+
+  registerEmulatorCommand("emacs-mcx.jumpToRegister", (emulator) => {
+    return emulator.runCommand("jumpToRegister");
+  });
+
+  registerEmulatorCommand("emacs-mcx.registerNameCommand", (emulator, ...args) => {
+    return emulator.runCommand("registerNameCommand", args);
+  });
+
+  registerEmulatorCommand("emacs-mcx.executeCommandWithPrefixArgument", (emulator, arg0) => {
+    if (typeof arg0 !== "object" || arg0 == null || Array.isArray(arg0)) {
+      return;
+    }
+
+    if (
+      typeof arg0?.command === "string" &&
+      (typeof arg0?.prefixArgumentKey === "string" || arg0?.prefixArgumentKey == null)
+    ) {
+      return emulator.executeCommandWithPrefixArgument(arg0["command"], arg0["args"], arg0["prefixArgumentKey"]);
     }
   });
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {
+export function deactivate(): void {
   return;
 }

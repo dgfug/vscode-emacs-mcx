@@ -2,7 +2,7 @@
  * This file is derived from https://github.com/VSCodeVim/Vim/tree/104cf4779a221e951a90ef5daa1e5aa7a161b0f7
  */
 
-import TransportStream = require("winston-transport");
+import TransportStream from "winston-transport";
 import * as vscode from "vscode";
 import * as winston from "winston";
 import { ConsoleForElectron } from "winston-console-for-electron";
@@ -53,7 +53,7 @@ class VsCodeMessage extends TransportStream {
     const selectedAction = await showMessage(message, ...this.actionMessages);
     if (selectedAction === "Suppress Errors" && this.configuration) {
       vscode.window.showInformationMessage(
-        "Ignorance is bliss; temporarily suppressing log messages. For more permanence, please configure `vim.debug.silent`."
+        "Ignorance is bliss; temporarily suppressing log messages. For more permanence, please configure `vim.debug.silent`.",
       );
       this.configuration.debug.silent = true;
     }
@@ -102,9 +102,12 @@ class NodeLogger implements ILogger {
   }
 
   public configChanged(configuration: IConfiguration) {
-    this.logger.transports[0].level = configuration.debug.loggingLevelForConsole;
-    this.logger.transports[0].silent = configuration.debug.silent;
-    this.logger.transports[1].level = configuration.debug.loggingLevelForAlert;
+    // `this.logger.transports` has 2 items as set at the constructor,
+    // so the `noUncheckedIndexedAccess` rule can be skipped here.
+
+    this.logger.transports[0]!.level = configuration.debug.loggingLevelForConsole;
+    this.logger.transports[0]!.silent = configuration.debug.silent;
+    this.logger.transports[1]!.level = configuration.debug.loggingLevelForAlert;
     (this.logger.transports[1] as VsCodeMessage).configuration = configuration;
   }
 }

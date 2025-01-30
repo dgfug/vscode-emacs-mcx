@@ -1,4 +1,7 @@
-import * as fs from "fs";
+/* eslint-env node */
+
+import fs from "node:fs";
+import url from "node:url";
 import stripJsonComments from "strip-json-comments";
 import {
   KeyBinding,
@@ -6,15 +9,16 @@ import {
   generateKeybindings,
   generateKeybindingsForPrefixArgument,
   generateKeybindingsForTypeCharInRectMarkMode,
-} from "./generate-keybindings";
+  generateKeybindingsForRegisterCommands,
+} from "./generate-keybindings.mjs";
 
-const srcFilePath = "./keybindings.json";
-const packageDotJsonPath = "./package.json";
+const srcFilePath = url.fileURLToPath(import.meta.resolve("../keybindings.json"));
+const packageDotJsonPath = url.fileURLToPath(import.meta.resolve("../package.json"));
 
 console.info(`Reading ${srcFilePath} ...`);
 const srcContent = fs.readFileSync(srcFilePath, "utf8");
 const srcJSON = JSON.parse(stripJsonComments(srcContent));
-const keybindingSrcs: Array<any> = srcJSON["keybindings"];
+const keybindingSrcs: Array<any> = srcJSON["keybindings"]; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 let dstKeybindings: KeyBinding[] = [];
 
@@ -28,6 +32,11 @@ keybindingSrcs.forEach((keybindingSrc) => {
   if (keybindingSrc.$special === "rectMarkModeTypes") {
     console.log("Adding keybindings for types in rectangle-mark-mode");
     dstKeybindings.push(...generateKeybindingsForTypeCharInRectMarkMode());
+    return;
+  }
+  if (keybindingSrc.$special == "registerCommandTypes") {
+    console.log("Adding keybindings for register commands");
+    dstKeybindings.push(...generateKeybindingsForRegisterCommands());
     return;
   }
 
@@ -45,4 +54,4 @@ const packageJson = JSON.parse(packageJsonContent);
 
 console.info(`Overwriting ${packageDotJsonPath} ...`);
 packageJson["contributes"]["keybindings"] = dstKeybindings;
-fs.writeFileSync(packageDotJsonPath, JSON.stringify(packageJson, null, "\t") + "\n");
+fs.writeFileSync(packageDotJsonPath, JSON.stringify(packageJson, null, "  ") + "\n");

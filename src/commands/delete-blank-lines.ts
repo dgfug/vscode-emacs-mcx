@@ -5,7 +5,7 @@ import { EmacsCommand } from ".";
 export class DeleteBlankLines extends EmacsCommand {
   public readonly id = "deleteBlankLines";
 
-  public async execute(textEditor: TextEditor, isInMarkMode: boolean, prefixArgument: number | undefined) {
+  public async run(textEditor: TextEditor, isInMarkMode: boolean, prefixArgument: number | undefined): Promise<void> {
     const document = textEditor.document;
 
     for (let iSel = 0; iSel < textEditor.selections.length; ++iSel) {
@@ -13,7 +13,7 @@ export class DeleteBlankLines extends EmacsCommand {
       // therefore, each selection must be obtained
       // by indexing on each iteration.
       // That's why for-of loop is not appropriate here.
-      const selection = textEditor.selections[iSel];
+      const selection = textEditor.selections[iSel]!;
 
       const curLineNum = selection.active.line;
       const curLine = document.lineAt(curLineNum);
@@ -50,8 +50,8 @@ export class DeleteBlankLines extends EmacsCommand {
           editBuilder.delete(
             new Range(
               new Position(curLineNum + 1, 0),
-              document.lineAt(finalFollowingEmptyLineNum).rangeIncludingLineBreak.end
-            )
+              document.lineAt(finalFollowingEmptyLineNum).rangeIncludingLineBreak.end,
+            ),
           );
         }
 
@@ -62,8 +62,8 @@ export class DeleteBlankLines extends EmacsCommand {
           editBuilder.delete(
             new Range(
               new Position(firstPreviousEmptyLineNum, 0),
-              document.lineAt(curLineNum - 1).rangeIncludingLineBreak.end
-            )
+              document.lineAt(curLineNum - 1).rangeIncludingLineBreak.end,
+            ),
           );
         }
       });
